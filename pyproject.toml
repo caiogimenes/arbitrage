@@ -10,6 +10,9 @@ requires-python = ">=3.13"
 dependencies = [
 ]
 
+[tool.poetry]
+packages = [{include = "arbitrage", from = "src"}]
+
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
