@@ -3,12 +3,6 @@ import json
 
 KAFKA_SERVER = 'kafka:9092'
 
-# producer = KafkaProducer(
-#     bootstrap_servers=KAFKA_SERVER,
-#     value_serializer= lambda v: json.dumps(v).encode('utf-8')
-
-# )
-
 _producer = None
 
 def get_kafka_producer():
