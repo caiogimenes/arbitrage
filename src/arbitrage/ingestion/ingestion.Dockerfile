@@ -1,26 +1,25 @@
 FROM python:3.12 AS builder
-
 RUN pip install poetry
-
-WORKDIR /ingestion
-
+WORKDIR /app
+ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 COPY poetry.lock pyproject.toml ./
-
 RUN poetry install --no-root
 
 
 FROM python:3.12-slim
 
 RUN useradd --create-home --shell /bin/bash appuser
-
 USER appuser
 
-WORKDIR /home/appuser/ingestion
+WORKDIR /home/appuser/app
 
-COPY --from=builder /ingestion/.venv ./.venv
+ENV PYTHONPATH=.
 
-ENV PATH="/home/appuser/ingestion/.venv/bin:$PATH"
+COPY --from=builder /app/.venv ./.venv
+ENV PATH="/home/appuser/app/.venv/bin:$PATH"
 
-COPY ./ingestion ./
 
-CMD ["python", "main.py"]
+COPY ./src ./src
+
+
+CMD ["python", "-m", "src.arbitrage.ingestion.main"]
