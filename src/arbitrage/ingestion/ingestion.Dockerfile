@@ -1,4 +1,5 @@
 FROM python:3.12 AS builder
+LABEL authors="lucascorrea"
 RUN pip install poetry
 WORKDIR /app
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true
