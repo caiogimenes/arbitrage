@@ -1,74 +1,41 @@
-import datetime, json
-import yfinance as yf
-import investpy
-from typing import List
-
-from src.arbitrage.ingestion.events_timeline import save_event_kafka
+import datetime
+import logging
 
 
-class RunIngestion:
-    def __init__(self, country:str,
-                 start_date=datetime,
-                 end_date=datetime):
-        self.country = country
-        self.start_date = start_date
-        self.end_date = end_date
-        self.ticks_df : List[str] = None
-        
-    @staticmethod
-    def _add_sa_stock(stocks:list):
-        if not stocks:
-            print("Nenhum ticker encontrado!")
-            return
-        
-        return [stock + '.SA' for stock in stocks]
+from src.arbitrage.ingestion import config
+from src.arbitrage.ingestion.pipeline import PipelineIngestion
+from src.arbitrage.ingestion.publishers import KafkaPublisher
+from src.arbitrage.ingestion.histdownloader import download_historical_data
+from src.arbitrage.ingestion.tickerscountry import TickerProvider
+
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
     
-    def _fecth_country_tickers(self) -> List:
-        self.ticks_df = investpy.get_stocks(country=self.country)
-        ticks_list = self.ticks_df['symbol'].to_list()
-        return ticks_list
-    
-    
-    def run_app(self):
-        try:
-            
-            ticks_list = self._fecth_country_tickers()
-            ticks_list_sa = self._add_sa_stock(stocks=ticks_list)
-            
-            all_ticks_df =  yf.download(ticks_list_sa[0:50], 
-                                        start=self.start_date,
-                                        end=self.end_date,
-                                        group_by='ticker')
-            
-            
-            for tick in ticks_list_sa[0:50]:
-                
-                tick_timeline = all_ticks_df[tick].dropna()
-                timeline_dict = tick_timeline.to_dict(orient='split')
-                
-                save_event_kafka(
-                    name_event='acoes_timeline',
-                    data={
-                        'ticker':tick,
-                        'timeline':timeline_dict
-                    },
-                    asset_count=1,
-                    source='historico-acoes-yfinance'
-                )
-        
-        except Exception as e:
-            raise ValueError('Falha na camada de Ingestion.') from e
-        
-
 if __name__ == "__main__":
 
-    data_inicio = datetime.datetime(2020, 1, 1)
-    data_fim = datetime.datetime(2024, 12, 31)
-    
-    run_i = RunIngestion(
-        country='brazil',
-        start_date=data_inicio,
-        end_date=data_fim
+    data_inicio = datetime.date(
+        config.START_YEAR, config.START_MONTH, config.START_DAY
+    )
+    data_fim = datetime.datetime(
+        config.END_YEAR, config.END_MONTH, config.END_DAY
     )
     
-    run_i.run_app()
+    ticker_fecher = TickerProvider()
+    kafka_publisher = KafkaPublisher(
+                        kafka_server=config.KAFKA_SERVER,
+                        topic=f'{config.KAFKA_TOPIC}_{config.COUNTRY}'
+                    )
+    
+    pipeline = PipelineIngestion(
+                    fetcher=ticker_fecher,
+                    publisher=kafka_publisher,
+                    downloader= download_historical_data,        
+                    country=config.COUNTRY,
+                    start_date=data_inicio,
+                    end_date=data_fim,
+                    limit=config.TICKS_LIMIT
+                )           
+    
+    result = pipeline.run()
+    logging.info(result)
