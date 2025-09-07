@@ -1,62 +1,77 @@
 import pytest
 import pandas as pd
 import datetime
-from unittest.mock import MagicMock
+from unittest.mock import ANY
 
-from src.arbitrage.ingestion.investpy_data import GetStocksCountry
-from src.arbitrage.ingestion.timeline_stock import TimelineStocks
-from src.arbitrage.ingestion.events_timeline import save_event_kafka
+from src.arbitrage.ingestion.tickerscountry import TickerProvider
+from src.arbitrage.ingestion.histdownloader import download_historical_data
+from src.arbitrage.ingestion.publishers import KafkaPublisher
+from src.arbitrage.ingestion import config
 
-def test_get_stock_b3():
-       
-    data = GetStocksCountry(country='brazil')
-    stocks_b3 = data.get_stock_country()
+
+def test_fetch_country_tickers():
+    country = config.COUNTRY
+    tickers_country = TickerProvider()
     
-    assert stocks_b3 is not None  
-    assert isinstance(stocks_b3, list)    
-    assert len(stocks_b3) != 0
-    assert 'PETR4' in stocks_b3
-
-def test_get_timeline_stock():
+    list_stock = tickers_country.fetch(country=country, limit=2)
+    
+    assert isinstance(list_stock, list)
+    assert list_stock is not None
+    
+    
+    
+def test_download_historical_data():
     
     stocks = ['B3SA3.SA', 'PETR4.SA', 'COGN3.SA']
-    date_in = datetime.datetime(year=2020, month=1, day=1)
-    date_out = datetime.datetime(year=2020, month=12, day=31)
-    
-    timeline = TimelineStocks(stocks=stocks)
-    df_timeline = timeline.get_timeline(start_date=date_in, 
-                                        end_date=date_out)
-    
-    assert df_timeline is not None
-    assert isinstance(df_timeline, pd.DataFrame)
 
-def test_save_event_kafka_sends_correct_payload(mocker):
-    
-    mock_producer_instance = MagicMock()
-    
-    mocker.patch(
-        'src.arbitrage.ingestion.events_timeline.KafkaProducer',
-        return_value=mock_producer_instance 
+    start_date = datetime.datetime(
+        config.START_YEAR, config.START_MONTH, config.START_DAY
     )
     
-    test_data = {'col1': [1, 2]}
+    end_date = datetime.datetime(
+        config.END_YEAR, config.END_MONTH, config.END_DAY
+    )
     
-    save_event_kafka(
-        name_event='test-topic',
+    data = download_historical_data(stocks, start_date, end_date)
+    
+    assert isinstance(data, pd.DataFrame)
+    assert 'PETR4.SA' in data.columns.levels[0]
+    
+    
+
+def test_publisher_kafka(mocker):
+    
+    mocker_produce_class =mocker.patch(
+        'src.arbitrage.ingestion.publishers.KafkaProducer'
+    )
+    
+    mock_producer_instance = mocker_produce_class.return_value
+    
+    test_kafka = KafkaPublisher(kafka_server=config.KAFKA_SERVER,
+                                topic='test-2')  
+    
+    test_data = {'col1': [1, 2]}
+  
+    
+    test_kafka.publisher(
         data=test_data,
         asset_count=2,
         source='test-source'
     )
     
+    mocker_produce_class.assert_called_once_with(
+        bootstrap_servers=config.KAFKA_SERVER,
+        value_serializer= ANY
+    )
+    
     mock_producer_instance.send.assert_called_once()
     mock_producer_instance.flush.assert_called_once()
-    
-    call_args = mock_producer_instance.send.call_args
-    sent_topic = call_args[0][0]
-    sent_payload = call_args[1]['value']
-    
-    assert sent_topic == 'test-topic'
-    assert sent_payload['data'] == test_data
+
+
+    _ , call_kwargs =  mock_producer_instance.send.call_args
+    print(call_kwargs['value'])
+    assert call_kwargs['value']['asset_count'] == 2
+    assert call_kwargs['value']['data'] == test_data
     
     
     
