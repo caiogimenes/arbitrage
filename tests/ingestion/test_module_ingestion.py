@@ -69,7 +69,6 @@ def test_publisher_kafka(mocker):
 
 
     _ , call_kwargs =  mock_producer_instance.send.call_args
-    print(call_kwargs['value'])
     assert call_kwargs['value']['asset_count'] == 2
     assert call_kwargs['value']['data'] == test_data
     
