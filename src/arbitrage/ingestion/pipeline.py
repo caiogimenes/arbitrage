@@ -66,9 +66,7 @@ class PipelineIngestion:
         if historical_data.empty:
             logging.error("Failed to download historical data. Pipeline execution finished.")
             return "Historical data download failed."
-        
-        logging.info("Publishing events to Kafka...")
-        
+               
         with ThreadPoolExecutor(max_workers=5) as executor:
 
             tasks = [(tick, historical_data) for tick in tickers]

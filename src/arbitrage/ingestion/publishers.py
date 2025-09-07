@@ -43,10 +43,12 @@ class KafkaPublisher:
             source (str):  The origin of the data (e.g., 'b3', 'investing_api'.
 
         """
-        logging.info(f"Publishing event {data['ticker']} on Kafka.....")
         try:
 
             producer = self._get_producer()
+            
+            logging.info(f"Publishing event {data['ticker']} on Kafka.....")
+
             
             payload = {
                 'source': source,
